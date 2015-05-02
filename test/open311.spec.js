@@ -95,15 +95,6 @@ describe('.serviceDiscovery()', function() {
       done();
     });
     
-    it('should parse XML when discovery.xml', function(done) {
-      request.get.callsArgWith(1, true, {statusCode: 200}, xml);
-      sinon.spy(xml2js, 'parseString');
-    
-      open311.serviceDiscovery(function(err, data) {});
-      expect(xml2js.parseString.called).to.be.true;
-    
-      done();
-    });
     
     it('should parse JSON when discovery.json', function(done) {
       open311.discovery = 'https://mayors24.cityofboston.gov/open311/discovery.json';
@@ -117,41 +108,6 @@ describe('.serviceDiscovery()', function() {
       done();
     });
     
-    it('when options.cache = true, it should set the endpoint url and add a trailing slash (if necessary)', function(done) {
-      open311.discovery = 'http://app.311.dc.gov/cwi/Open311/discovery.xml';
-      request.get.callsArgWith(1, true, {statusCode: 200}, xml);
-      
-      open311.serviceDiscovery({ cache: true }, function(err, data) {
-        expect(open311.endpoint).to.equal('http://app.311.dc.gov/cwi/Open311/v2/');
-      });
-      done();
-    });
-    
-    it('when options.cache = true, it should set the endpoint url based on options.specification', function(done) {
-      open311.discovery = 'http://app.311.dc.gov/cwi/Open311/discovery.xml';
-      request.get.callsArgWith(1, true, {statusCode: 200}, xml);
-      
-      open311.serviceDiscovery({ 
-        cache: true,
-        specification: 'http://wiki.open311.org/GeoReport_v2.1_Draft' 
-      }, function(err, data) {
-        expect(open311.endpoint).to.equal('http://app.311.dc.gov/cwi/Open311/');
-      });
-      done();
-    });
-    
-    it('when options.cache = true, it should set the production/test based on options.type', function(done) {
-      open311.discovery = 'https://mayors24.cityofboston.gov/open311/discovery.json';
-      request.get.callsArgWith(1, true, {statusCode: 200}, json);
-      
-      open311.serviceDiscovery({ 
-        cache: true,
-        type: 'test',
-      }, function(err, data) {
-        expect(open311.endpoint).to.equal('https://mayors24.cityofboston.gov:6443/open311/v2/');
-      });
-      done();
-    });
     
   });
 
@@ -332,15 +288,6 @@ describe('.serviceDiscovery()', function() {
       });
     });
 
-    it('should cleanup nested XML `attributes[].values arrays`', function(done) {
-      var xml = fs.readFileSync(__dirname + '/mocks/dc-services-S0301.xml', 'utf8');
-      // Mock request.get to return the XML when called
-      request.get.callsArgWith(1, false, {statusCode: 200}, xml);
-      open311.serviceDefinition('S0301', function(err, data) {
-        expect(data.attributes[1].values).to.be.an('array');
-        done();
-      });
-    });
 
     it('should cleanup nested XML and set empty `attributes[].values` to null', function(done) {
       var xml = fs.readFileSync(__dirname + '/mocks/dc-services-S0301.xml', 'utf8');
@@ -475,8 +422,8 @@ describe('.serviceDiscovery()', function() {
       // Mock request.get to return the XML when called
       request.get.callsArgWith(1, false, {statusCode: 200}, xml);
       open311.token('12345', function(err, data) {
-        expect(data[0].token).to.equal(12345);
-        expect(data[0]['service_request_id']).to.equal(638344);
+        expect(data.token).to.equal('12345');
+        expect(data['service_request_id']).to.equal('638344');
 
         done();
       });

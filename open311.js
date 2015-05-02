@@ -12,6 +12,7 @@ var request = require('request');
 var qs = require('querystring');
 var __ = require('lodash');
 var xml2js = require('xml2js');
+var xml2jsParser = new xml2js.Parser({emptyTag: null, explicitArray: false});
 var Cities = require('./cities');
 var inspect = require('eyes').inspector({maxLength: false});
 
@@ -90,7 +91,7 @@ Open311.prototype.serviceDiscovery = function(options, callback) {
     // endpoints. It's better to key off of the discovery url here
     discoverySplit = self.discovery.split('.');
     if (discoverySplit[discoverySplit.length-1] === 'xml') {
-      xml2js.parseString(body, function (err, data) {
+      xml2jsParser.parseString(body, function (err, data) {
         if (err) callback(err);
         _cacheOptions.call(self, data, options, function () {
           callback(null, data);
@@ -168,7 +169,7 @@ Open311.prototype.serviceList = function(callback) {
     }
 
     if (self.format === 'xml') {
-      xml2js.parseString(body, function (err, data) {
+      xml2jsParser.parseString(body, function (err, data) {
         if (err) callback(err);
         data = data.services.service;
         callback(null, data);
@@ -202,9 +203,10 @@ Open311.prototype.serviceDefinition = function(service_code, callback) {
     }
 
     if (self.format === 'xml') {
-      xml2js.parseString(body, function (err, data) {
+      xml2jsParser.parseString(body, function (err, data) {
         if (err) callback(err);
-        data = data.services.service;
+        data = data.service_definition;
+        data.attributes = data.attributes.attribute;
         callback(null, data);
       });
     }
@@ -253,9 +255,9 @@ Open311.prototype.submitRequest = function(data, callback) {
     }
 
     if (self.format === 'xml') {
-      xml2js.parseString(body, function (err, resData) {
+      xml2jsParser.parseString(body, function (err, resData) {
         if (err) console.error(err);
-        callback(null, resData.service_requests.request);
+        callback(null, [resData.service_requests.request]);
       });
     }
     else {
@@ -288,9 +290,9 @@ Open311.prototype.token = function(token, callback) {
     }
 
     if (self.format === 'xml') {
-      xml2js.parseString(body, function (err, data) {
+      xml2jsParser.parseString(body, function (err, data) {
         if (err) callback(err);
-        callback(null, data);
+        callback(null, data.service_requests.request);
       });
     }
     else {
@@ -352,7 +354,7 @@ Open311.prototype.serviceRequests = function(serviceRequestId, params, callback)
     }
 
     if (self.format === 'xml') {
-      xml2js.parseString(body, function (err, data) {
+      xml2jsParser.parseString(body, function (err, data) {
         if (err) callback(err);
         data = data.service_requests.request;
         // Convert dates
