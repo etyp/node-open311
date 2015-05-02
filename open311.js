@@ -11,9 +11,9 @@ var pathLib = require('path');
 var request = require('request');
 var qs = require('querystring');
 var __ = require('lodash');
-var spark = require('sparkxml');
-var xml2json = require('xml2json'); // used in submitRequest because of ambiguous Spark results
+var xml2js = require('xml2js');
 var Cities = require('./cities');
+var inspect = require('eyes').inspector({maxLength: false});
 
 /**
  * Class constructor
@@ -51,7 +51,7 @@ var Open311 = module.exports = function(options) {
  * @see http://wiki.open311.org/Service_Discovery
  */
 Open311.prototype.serviceDiscovery = function(options, callback) {
-  var self = this, defaults, url, path, format, data, endpoints, endpoint;
+  var self = this, defaults, url, path, format, data, discoverySplit;
 
   // check if there are options
   if (__.isFunction(options)) {
@@ -86,44 +86,67 @@ Open311.prototype.serviceDiscovery = function(options, callback) {
       return;
     }
 
-    if (format === 'xml') {
-      data = spark.parseXml(body);
+    // Cities like DC have xml formats, but .json discovery
+    // endpoints. It's better to key off of the discovery url here
+    discoverySplit = self.discovery.split('.');
+    if (discoverySplit[discoverySplit.length-1] === 'xml') {
+      xml2js.parseString(body, function (err, data) {
+        if (err) callback(err);
+        _cacheOptions.call(self, data, options, function () {
+          callback(null, data);
+        });
+      });
     }
     else {
       data = JSON.parse(body);
-    }
-
-    // do we save the data to the object?
-    if (options.cache) {
-      // filter the list of available endpoints by our specification and type
-      endpoints = __.filter(data.endpoints, function(endpoint) {
-        return (
-          (endpoint.specification === options.specification) &&
-          (endpoint.type === options.type)
-        );
+      _cacheOptions.call(self, data, options, function () {
+        callback(null, data);
       });
-      endpoint = endpoints[options.index];
-            
-      // set the endpoint url
-      self.endpoint = endpoint.url;
-      
-      // detect whether there is a trailing slash (there should be)
-      if (self.endpoint.slice(-1) !== '/') {
-        self.endpoint = self.endpoint + '/';
-      }
-      
-      // try to find JSON in the format, otherwise set format to be XML
-      if (__.indexOf(endpoint.formats, 'application/json' !== -1)) {
-        self.format = 'json'
-      }
-      else {
-        self.format = 'xml';
-      }
     }
 
-    callback(false, data);
+
   });
 };
+
+/**
+ * Cache endpoint options.
+ * They will get saved to the object
+ * if the option is specified {cache: true}
+ */
+function _cacheOptions(responseData, options, callback) {
+  if (!options.cache) return callback && callback();
+
+  var endpoints, endpoint;
+  // filter the list of available endpoints by our specification and type
+  endpoints = __.filter(responseData.endpoints, function(endpoint) {
+    return (
+      (endpoint.specification === options.specification) &&
+      (endpoint.type === options.type)
+    );
+  });
+
+  endpoint = endpoints[options.index];
+        
+  // set the endpoint url
+  this.endpoint = endpoint.url;
+  
+  // detect whether there is a trailing slash (there should be)
+  if (this.endpoint.slice(-1) !== '/') {
+    this.endpoint = this.endpoint + '/';
+  }
+
+  // console.log(this);
+  
+  // try to find JSON in the format, otherwise set format to be XML
+  if (__.indexOf(endpoint.formats, 'application/json' !== -1)) {
+    this.format = 'json'
+  }
+  else {
+    this.format = 'xml';
+  }
+  // Call callback
+  callback && callback()
+}
 
 /**
  * Get a list of service requests.
@@ -145,12 +168,16 @@ Open311.prototype.serviceList = function(callback) {
     }
 
     if (self.format === 'xml') {
-      data = spark.parseXml(body);
+      xml2js.parseString(body, function (err, data) {
+        if (err) callback(err);
+        data = data.services.service;
+        callback(null, data);
+      });
     }
     else {
       data = JSON.parse(body);
+      callback(null, data)
     }
-    callback(null, data);
   });
 };
 
@@ -175,13 +202,16 @@ Open311.prototype.serviceDefinition = function(service_code, callback) {
     }
 
     if (self.format === 'xml') {
-      data = spark.parseXml(body);
+      xml2js.parseString(body, function (err, data) {
+        if (err) callback(err);
+        data = data.services.service;
+        callback(null, data);
+      });
     }
     else {
       data = JSON.parse(body);
+      callback(null, data)
     }
-
-    callback(null, data)
   });
 };
 
@@ -223,16 +253,15 @@ Open311.prototype.submitRequest = function(data, callback) {
     }
 
     if (self.format === 'xml') {
-      // here we're using xml2json because the Open311 Spark Convention
-      // results in ambiguous json: "service_request_id" is indistinguishable from "token"
-      resData = xml2json.toJson(body, {object: true}).service_requests.request;
-      resData = [ resData ] // object needs to be wrapped in an array
+      xml2js.parseString(body, function (err, resData) {
+        if (err) console.error(err);
+        callback(null, resData.service_requests.request);
+      });
     }
     else {
       resData = JSON.parse(body);
+      callback(null, resData);
     }
-
-    callback(null, resData);
   });
 };
 
@@ -259,19 +288,15 @@ Open311.prototype.token = function(token, callback) {
     }
 
     if (self.format === 'xml') {
-      data = spark.parseXml(body);
-      // Manually check if no service_request_id was returned
-      // this slightly goes against the spec but avoids the non-optimal 
-      // result of Spark convention returning [[TOKEN]]
-      if (__.isArray(data[0])) {
-        data[0] = { token: data[0][0] };
-      }
+      xml2js.parseString(body, function (err, data) {
+        if (err) callback(err);
+        callback(null, data);
+      });
     }
     else {
-      data = JSON.parse(body); // it's returned as an 
+      data = JSON.parse(body);
+      callback(null, data)
     }
-    
-    callback(null, data);
   });
 };
 
@@ -319,6 +344,7 @@ Open311.prototype.serviceRequests = function(serviceRequestId, params, callback)
     params.service_request_id = serviceRequestId.join(',');
   } 
 
+
   this._get(url, params, function(err, body) {
     if (err) {
       callback (err, body);
@@ -326,27 +352,41 @@ Open311.prototype.serviceRequests = function(serviceRequestId, params, callback)
     }
 
     if (self.format === 'xml') {
-      data = spark.parseXml(body);
+      xml2js.parseString(body, function (err, data) {
+        if (err) callback(err);
+        data = data.service_requests.request;
+        // Convert dates
+        data = _convertDates(data);
+        callback(null, data);
+      });
     }
     else {
       data = JSON.parse(body);
+      // Convert dates
+      data = _convertDates(data);
+      callback(null, data)
     }
     
-    // Convert the dates into javascript dates
-    __.each(data, function(request) {
-      if (request.requested_datetime) {
-        request.requested_datetime = new Date(request.requested_datetime);
-      }
-      if (request.requested_datetime) {
-        request.updated_datetime = new Date(request.updated_datetime);
-      }
-      if (request.expected_datetime) {
-        request.expected_datetime = new Date(request.expected_datetime);
-      }
-    });
-    callback(null, data);
+
   });
 };
+
+function _convertDates(requestData) {
+  // Convert the dates into javascript dates
+  __.each(requestData, function(request) {
+    if (request.requested_datetime) {
+      request.requested_datetime = new Date(request.requested_datetime);
+    }
+    if (request.requested_datetime) {
+      request.updated_datetime = new Date(request.updated_datetime);
+    }
+    if (request.expected_datetime) {
+      request.expected_datetime = new Date(request.expected_datetime);
+    }
+  });
+
+  return requestData;
+}
 
 /**
  * Get the status of a single service request.

@@ -2,7 +2,7 @@ var expect = require('chai').expect;
 var sinon = require('sinon');
 var Open311 = require('../open311');
 var request = require('request');
-var spark = require('sparkxml');
+var xml2js = require('xml2js');
 var fs    = require('fs');
 
 describe('Open311()', function() {
@@ -97,12 +97,11 @@ describe('.serviceDiscovery()', function() {
     
     it('should parse XML when discovery.xml', function(done) {
       request.get.callsArgWith(1, true, {statusCode: 200}, xml);
-      sinon.spy(spark, 'parseXml');
+      sinon.spy(xml2js, 'parseString');
     
       open311.serviceDiscovery(function(err, data) {});
-      expect(spark.parseXml.called).to.be.true;
+      expect(xml2js.parseString.called).to.be.true;
     
-      spark.parseXml.restore(); // cleanup 
       done();
     });
     
