@@ -14,7 +14,7 @@ var __ = require('lodash');
 var xml2js = require('xml2js');
 var xml2jsParser = new xml2js.Parser({emptyTag: null, explicitArray: false});
 var Cities = require('./cities');
-var inspect = require('eyes').inspector({maxLength: false});
+// var inspect = require('eyes').inspector({maxLength: false});
 
 /**
  * Class constructor
